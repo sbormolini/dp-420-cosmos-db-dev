@@ -481,7 +481,8 @@ public class Program
         CustomerV4 customer = response.Resource;
 
         //To-Do: Write code to increment salesorderCount
-
+        //Increment the salesOrderTotal property
+        customer.salesOrderCount++;
 
         //Create a new order
         string orderId = "5350ce31-ea50-4df9-9a48-faff97675ac5"; //Normally would use Guid.NewGuid().ToString()
@@ -513,10 +514,14 @@ public class Program
         };
 
         //To-Do: Write code to insert the new order and update the customer as a transaction
-        
-        
+        TransactionalBatchResponse txBatchResponse = await container.CreateTransactionalBatch(new PartitionKey(salesOrder.customerId))
+            .CreateItem<SalesOrder>(salesOrder)
+            .ReplaceItem<CustomerV4>(customer.id, customer)
+            .ExecuteAsync();
 
-        Console.WriteLine("Press any key to continue...");
+        if (txBatchResponse.IsSuccessStatusCode)
+            Console.WriteLine("Press any key to continue...");
+            
         Console.ReadKey();
     }
 
@@ -601,7 +606,13 @@ public class Program
                 List<Task> tasks = new List<Task>();
 
                 //To-Do: Write code to capture changed product categories
-
+                //Fetch each change to productCategory container
+                foreach (ProductCategory item in input)
+                {
+                    string categoryId = item.id;
+                    string categoryName = item.name;
+                    tasks.Add(UpdateProductCategoryName(productContainer, categoryId, categoryName));
+                }
 
                 await Task.WhenAll(tasks);
             });
@@ -639,7 +650,19 @@ public class Program
             FeedResponse<Product> response = await resultSet.ReadNextAsync();
 
             //To-Do: Write code to update the product container
-
+            //Loop through all products
+            foreach (Product product in response)
+            {
+                productCount++;
+                //update category name for product
+                product.categoryName = categoryName;
+                //write the update back to product container
+                await productContainer.ReplaceItemAsync(
+                    partitionKey: new PartitionKey(categoryId),
+                    id: product.id,
+                    item: product
+                );
+            }
 
             Console.ForegroundColor = ConsoleColor.Blue;
             Console.WriteLine($" + Change Feed Processor ->> Updated {productCount} products with updated category name '{categoryName}'");
